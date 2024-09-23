@@ -3,9 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-print('Hello')
-
-
 PATH = '/Users/fredericweiss/Documents/Konto_2024.xlsm'
 accounts_areas = {
     'Ideeller Bereich': [31, 32, 35, 36, 39, 41, 42, 44, 47],
@@ -58,6 +55,16 @@ def get_metric(df_bills, col):
     # Reading the profit from last row of the dataframe
     current_profit = df_bills.iloc[len(df_bills)-1,col]
     return round(current_profit,2)
+
+
+def account_sum(df_bills, acc):
+    acc_sum = np.sum(df_bills[df_bills['Konto'] == acc]['Betrag+/-'])
+    if acc_sum >= 0:
+        status = f'Einnahmen Konto {acc}'
+    else:
+        status = f'Ausgaben Konto {acc}'
+
+    return round(acc_sum,2), status
 
 
 def generate_spendings_chart(df_bills, df_planned, accounts):
@@ -115,7 +122,44 @@ def transactions(df_bills, account):
     df.index = df['Beleg Nr.']
     df.drop(['Beleg Nr.'], inplace=True, axis=1)
     df['Betrag+/-'] = df['Betrag+/-']
+    df['Datum'] = df['Datum'].dt.strftime('%d/%m/%Y')
     return df
+
+
+def profit_chart (df_bills, df_forecast):
+    fig, ax = plt.subplots()
+
+    df = df_bills[['Datum', 'Geldvermögen', 'Gewinn 2024']]
+    df = df.sort_values(by='Datum')
+
+    ax.plot(df['Datum'], df['Gewinn 2024'], color='green')
+    ax.plot(df['Datum'], df['Geldvermögen'], color='blue')
+
+    df2 = pd.DataFrame(columns=['Datum', 'Geldvermögen', 'Gewinn'])
+    df2.loc[0,'Datum'] = df.loc[len(df)-1,'Datum']
+    df2.loc[0,'Geldvermögen'] = df.loc[len(df)-1,'Geldvermögen']
+    df2.loc[0,'Gewinn'] = df.loc[len(df)-1,'Gewinn 2024']
+
+    df_forecast = df_forecast.sort_values(by='Datum')
+
+    new_row = 1
+    for idx in range(len(df_forecast)):
+        df2.loc[new_row,'Datum'] = df_forecast.iloc[idx,2]
+        df2.loc[new_row,'Gewinn'] = df2.loc[new_row-1,'Gewinn'] + df_forecast.iloc[idx,3]
+        df2.loc[new_row,'Geldvermögen'] = df2.loc[new_row-1,'Geldvermögen'] + df_forecast.iloc[idx,3]
+        new_row += 1
+
+    ax.plot(df2['Datum'], df2['Gewinn'], linestyle='--', color='green')
+    ax.plot(df2['Datum'], df2['Geldvermögen'], linestyle='--', color='blue')
+
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['bottom'].set_visible(False)
+    plt.gca().spines['left'].set_visible(False)
+
+    plt.grid(axis='y')
+
+    return fig
 
 
 
@@ -140,7 +184,7 @@ with st.sidebar:
     st.table(df_accounts)
 
 # ------------- Main Body -------------
-cols = st.columns((1.5, 4.5, 2), gap='medium')
+cols = st.columns((1.5, 4, 2.5), gap='small')
 
 # ------------- First column -------------
 with cols[0]:
@@ -154,17 +198,27 @@ with cols[0]:
 
     # Forecasted profit
     profit_forecast = f'{get_metric(forecast, 4)} €'
-    st.metric(label='Aktueller Gewinn', value=profit_forecast)
+    st.metric(label='Prognistizierter Gewinn', value=profit_forecast)
+
+    # Forecasted wealth
+    wealth_forecast = f'{get_metric(forecast, 5)} €'
+    st.metric(label='Prognistizierters Vermögen', value=wealth_forecast)
+
+    # Displaying the status of selected accont
+    sum, account_status = account_sum(bills, account)
+    st.metric(label=account_status, value=f'{sum} €')
 
 # ------------- Second column -------------
 
 # generate spending plots
 accounts_selected = accounts_areas[area]
-spendings_ideell = generate_spendings_chart(bills, planned, accounts_selected)
+spendings = generate_spendings_chart(bills, planned, accounts_selected)
+profits = profit_chart(bills, forecast)
 
 with cols[1]:
-    st.pyplot(spendings_ideell)
+    st.pyplot(spendings)
+    st.pyplot(profits)
 
 # ------------- Third column -------------
 with cols[2]:
-    st.table(transactions(bills, account))
+    st.dataframe(transactions(bills, account))
