@@ -201,7 +201,9 @@ def lower_income(df_prep):
     df = df_prep[df_prep['Diff'] < 0]
     df = df[df['Konto'].isin(accounts_income)]
     df = df.sort_values(by='Diff', ascending=True)
-    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+    df.index = df['Konto']
+    df = df[['Bezeichnung', 'Diff']][0:5]
+
 
     return df
 
@@ -211,7 +213,8 @@ def lower_exp(df_prep):
     df = df_prep[df_prep['Diff'] > 0]
     df = df[df['Konto'].isin(accounts_exp)]
     df = df.sort_values(by='Diff', ascending=False)
-    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+    df.index = df['Konto']
+    df = df[['Bezeichnung', 'Diff']][0:5]
 
     return df
 
@@ -221,7 +224,8 @@ def higher_income(df_prep):
     df = df_prep[df_prep['Diff'] > 0]
     df = df[df['Konto'].isin(accounts_income)]
     df = df.sort_values(by='Diff', ascending=False)
-    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+    df.index = df['Konto']
+    df = df[['Bezeichnung', 'Diff']][0:5]
 
     return df
 
@@ -231,7 +235,8 @@ def higher_exp(df_prep):
     df = df_prep[df_prep['Diff'] < 0]
     df = df[df['Konto'].isin(accounts_exp)]
     df = df.sort_values(by='Diff', ascending=True)
-    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+    df.index = df['Konto']
+    df = df[['Bezeichnung', 'Diff']][0:5]
 
     return df
 
