@@ -13,7 +13,7 @@ accounts_areas = {
 
 st.set_page_config(
     page_title="DLRG Reichenbach Finance Dashboard",
-    page_icon="🏂",
+    page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded")
 
@@ -55,6 +55,11 @@ def get_metric(df_bills, col):
     # Reading the profit from last row of the dataframe
     current_profit = df_bills.iloc[len(df_bills)-1,col]
     return round(current_profit,2)
+
+
+def area_sum(df_bills, accounts):
+    sum = np.sum(df_bills[df_bills['Konto'].isin(accounts)]['Betrag+/-'])
+    return round(sum, 2)
 
 
 def account_sum(df_bills, acc):
@@ -116,16 +121,6 @@ def generate_spendings_chart(df_bills, df_planned, accounts):
     return fig
 
 
-def transactions(df_bills, account):
-    df = df_bills[df_bills['Konto'] == account]
-    df = df[['Beleg Nr.', 'Datum', 'Bezeichnung', 'Betrag+/-']]
-    df.index = df['Beleg Nr.']
-    df.drop(['Beleg Nr.'], inplace=True, axis=1)
-    df['Betrag+/-'] = df['Betrag+/-']
-    df['Datum'] = df['Datum'].dt.strftime('%d/%m/%Y')
-    return df
-
-
 def profit_chart (df_bills, df_forecast):
     fig, ax = plt.subplots()
 
@@ -162,6 +157,84 @@ def profit_chart (df_bills, df_forecast):
     return fig
 
 
+def transactions(df_bills, account):
+    df = df_bills[df_bills['Konto'] == account]
+    df = df[['Beleg Nr.', 'Datum', 'Bezeichnung', 'Betrag+/-']]
+    df.index = df['Beleg Nr.']
+    df.drop(['Beleg Nr.'], inplace=True, axis=1)
+    df['Betrag+/-'] = df['Betrag+/-']
+    df['Datum'] = df['Datum'].dt.strftime('%d/%m/%Y')
+    return df
+
+
+def forecast_table(df_forecast):
+    df_forecast = df_forecast.sort_values(by='Datum')
+    df = df_forecast[['Einnahme / Ausgabe', 'Datum', 'Betrag']]
+    df['Datum'] = df['Datum'].dt.strftime('%d/%m/%Y')
+    df.index = df_forecast['Konto']
+
+    return df
+
+
+def top5_prep (df_bills, df_planned):
+    accounts = [31, 32, 35, 36, 41, 42, 44, 47, 51, 52, 56, 601, 605, 607, 608, 701, 709, 61, 65, 67, 68, 71, 79, 806, 807, 809, 87, 88]
+
+    # Setting up a dataframe
+    df = pd.DataFrame()
+
+    # Merging spendings / incomes and plan values on accounts
+    df['Konto'] = accounts
+    df = pd.merge(df, df_planned, on='Konto', how='left')
+    df = pd.merge(df, df_bills.loc[:,['Konto','Betrag+/-']].dropna().groupby(['Konto'], as_index=False).sum(), on='Konto', how='left')
+
+    df.drop(['Vorzeichen'], axis=1, inplace=True) # Dropping unncessary columns
+    df = df.rename(columns={'Betrag+/-': 'Ist'}) # Renaming columns
+    df = df.fillna(0) # Replace nan values with 0
+
+    df['Diff'] = (df.Plan - df.Ist) * (-1)
+
+    return df
+
+
+def lower_income(df_prep):
+    accounts_income = [31, 32, 35, 36, 39, 51, 52, 601, 605, 607, 608, 701, 709, 806, 807, 809]
+    df = df_prep[df_prep['Diff'] < 0]
+    df = df[df['Konto'].isin(accounts_income)]
+    df = df.sort_values(by='Diff', ascending=True)
+    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+
+    return df
+
+
+def lower_exp(df_prep):
+    accounts_exp = [41, 42, 44, 47, 56, 61, 65, 67, 68, 71, 79, 87, 88]
+    df = df_prep[df_prep['Diff'] > 0]
+    df = df[df['Konto'].isin(accounts_exp)]
+    df = df.sort_values(by='Diff', ascending=False)
+    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+
+    return df
+
+
+def higher_income(df_prep):
+    accounts_income = [31, 32, 35, 36, 39, 51, 52, 601, 605, 607, 608, 701, 709, 806, 807, 809]
+    df = df_prep[df_prep['Diff'] > 0]
+    df = df[df['Konto'].isin(accounts_income)]
+    df = df.sort_values(by='Diff', ascending=False)
+    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+
+    return df
+
+
+def higher_exp(df_prep):
+    accounts_exp = [41, 42, 44, 47, 56, 61, 65, 67, 68, 71, 79, 87, 88]
+    df = df_prep[df_prep['Diff'] < 0]
+    df = df[df['Konto'].isin(accounts_exp)]
+    df = df.sort_values(by='Diff', ascending=True)
+    df = df[['Konto', 'Bezeichnung', 'Diff']][0:5]
+
+    return df
+
 
 # ------------- Preparation -------------
 accounts, bills, forecast, planned = get_data(PATH)
@@ -184,41 +257,86 @@ with st.sidebar:
     st.table(df_accounts)
 
 # ------------- Main Body -------------
+st.markdown('# DLRG Reichenbach Finanzen')
 cols = st.columns((1.5, 4, 2.5), gap='small')
+accounts_selected = accounts_areas[area]
 
 # ------------- First column -------------
 with cols[0]:
+
+    st.markdown('##### Kennzahlen')
+
     # Current profit
     profit = f'{get_metric(bills, 9)} €'
     st.metric(label='Aktueller Gewinn', value=profit)
-
-    # Current wealth
-    wealth = f'{get_metric(bills, 8)} €'
-    st.metric(label='Aktuelles Vermögen', value=wealth)
 
     # Forecasted profit
     profit_forecast = f'{get_metric(forecast, 4)} €'
     st.metric(label='Prognistizierter Gewinn', value=profit_forecast)
 
+    # Current wealth
+    wealth = f'{get_metric(bills, 8)} €'
+    st.metric(label='Aktuelles Vermögen', value=wealth)
+
     # Forecasted wealth
     wealth_forecast = f'{get_metric(forecast, 5)} €'
     st.metric(label='Prognistizierters Vermögen', value=wealth_forecast)
+
+    # Sum over all incomes and expenses per account
+    sum_area = area_sum(bills, accounts_selected)
+    st.metric(label=f'Bilanz im Berich {area}', value=f'{sum_area} €')
 
     # Displaying the status of selected accont
     sum, account_status = account_sum(bills, account)
     st.metric(label=account_status, value=f'{sum} €')
 
+
 # ------------- Second column -------------
 
 # generate spending plots
-accounts_selected = accounts_areas[area]
 spendings = generate_spendings_chart(bills, planned, accounts_selected)
 profits = profit_chart(bills, forecast)
 
 with cols[1]:
+    st.markdown(f'##### Soll-Ist-Vergleich')
     st.pyplot(spendings)
+    st.markdown(f'##### Gewinn/- Vermögensentwicklung')
     st.pyplot(profits)
 
 # ------------- Third column -------------
 with cols[2]:
-    st.dataframe(transactions(bills, account))
+
+    st.markdown(f'##### Buchungen Konto {account}')
+    st.dataframe(transactions(bills, account), use_container_width=True)
+
+    st.markdown(f'##### Prognose')
+    st.dataframe(forecast_table(forecast), use_container_width=True)
+
+
+# ------------- Second Page -------------
+st.markdown('### Top 5')
+cols = st.columns(4, gap='small')
+prep = top5_prep(bills, planned)
+
+# ------------- First column -------------
+with cols[0]:
+    st.markdown('##### Unter Plan Einnahmen')
+    lower_income_accounts = lower_income(prep)
+    st.dataframe(lower_income_accounts, use_container_width=True)
+
+# ------------- Second column -------------
+with cols[1]:
+    st.markdown('##### Über Plan Einnahmen')
+    higher_income_accounts = higher_income(prep)
+    st.dataframe(higher_income_accounts, use_container_width=True)
+
+# ------------- Third column -------------
+with cols[2]:
+    st.markdown('##### Unter Plan Ausgaben')
+    lower_exp_accounts = lower_exp(prep)
+    st.dataframe(lower_exp_accounts, use_container_width=True)
+# ------------- Fourth column -------------
+with cols[3]:
+    st.markdown('##### Über Plan Ausgaben')
+    higher_exp_accounts = higher_exp(prep)
+    st.dataframe(higher_exp_accounts, use_container_width=True)
