@@ -85,6 +85,9 @@ def account_sum(df_bills, acc):
 
 # Function to generate a chart with all spendings and incomes for each account in the selected area
 def generate_spendings_chart(df_bills, df_planned, accounts):
+    # Setting up the plot
+    fig, ax = plt.subplots()
+    
     # Setting up a dataframe
     df = pd.DataFrame()
 
@@ -101,9 +104,6 @@ def generate_spendings_chart(df_bills, df_planned, accounts):
     # Adding columns to the dataframe comparing planned with actual values
     df['Diff'] = (df.Plan - df.Ist) * (-1)
     df['Prozent'] = round(df.Ist / df.Plan * 100, 2)
-
-    # Setting up the plot
-    fig, ax = plt.subplots(figsize=(5,2))
 
     # Sorting the dataframe for plotting
     df = df.sort_index(ascending=False)
@@ -357,11 +357,11 @@ profits = profit_chart(bills, forecast)
 with cols[1]:
     # Plot spendings plot
     st.markdown(f'##### Soll-Ist-Vergleich')
-    st.pyplot(spendings)
+    st.pyplot(spendings, use_container_width=True)
 
     # Plot profits plot
     st.markdown(f'##### Gewinn/- Vermögensentwicklung')
-    st.pyplot(profits)
+    st.pyplot(profits, use_container_width=True)
 
 # ------------- Third column -------------
 with cols[2]:
